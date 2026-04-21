@@ -1,0 +1,332 @@
+
+<h2 class="sr-only">Interactive noise pollution dashboard for the 7-week Bangalore urban study. Toggle datasets, filter by zone type, and view detailed analytics below the chart.</h2>
+
+<style>
+.btn-tog{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;font-size:12px;cursor:pointer;color:var(--color-text-secondary);transition:background 0.15s,color 0.15s;}
+.btn-tog.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary);}
+.btn-tog .swatch{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+.zone-btn{padding:4px 10px;border-radius:var(--border-radius-md);border:0.5px solid var(--color-border-secondary);background:transparent;font-size:11px;cursor:pointer;color:var(--color-text-secondary);transition:all 0.15s;}
+.zone-btn.sel{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary);}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:1.25rem 0;}
+.stat-card{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:0.75rem 1rem;}
+.stat-card .lbl{font-size:11px;color:var(--color-text-secondary);margin:0 0 3px;}
+.stat-card .val{font-size:18px;font-weight:500;margin:0;color:var(--color-text-primary);}
+.stat-card .sub{font-size:11px;color:var(--color-text-tertiary);margin:2px 0 0;}
+.analytics-section{margin-top:1.5rem;border-top:0.5px solid var(--color-border-tertiary);padding-top:1.25rem;}
+.section-label{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin:0 0 10px;letter-spacing:0.04em;}
+.atbl{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed;}
+.atbl th{font-weight:500;color:var(--color-text-secondary);text-align:left;padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);}
+.atbl td{padding:6px 8px;color:var(--color-text-primary);border-bottom:0.5px solid var(--color-border-tertiary);}
+.atbl tr:last-child td{border-bottom:none;}
+.atbl .over{color:#a32d2d;font-weight:500;}
+.atbl .under{color:#3b6d11;}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:500;}
+.badge-danger{background:#fcebeb;color:#a32d2d;}
+.badge-success{background:#eaf3de;color:#3b6d11;}
+.badge-warn{background:#faeeda;color:#854f0b;}
+.bar-mini{display:inline-block;height:6px;border-radius:3px;vertical-align:middle;margin-right:4px;}
+</style>
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px;">
+  <span style="font-size:11px;color:var(--color-text-secondary);margin-right:2px;">Show:</span>
+  <button class="btn-tog active" id="tog-min" onclick="toggle('min')"><span class="swatch" style="background:#639922;"></span>Min avg</button>
+  <button class="btn-tog active" id="tog-avg" onclick="toggle('avg')"><span class="swatch" style="background:#378ADD;"></span>Overall avg</button>
+  <button class="btn-tog active" id="tog-max" onclick="toggle('max')"><span class="swatch" style="background:#BA7517;"></span>Max avg</button>
+  <button class="btn-tog active" id="tog-cpcb" onclick="toggle('cpcb')"><span class="swatch" style="background:#E24B4A;border:1px dashed #E24B4A;"></span>CPCB limit</button>
+  <span style="margin-left:auto;font-size:11px;color:var(--color-text-tertiary);">Filter zone:</span>
+  <button class="zone-btn sel" id="zf-all" onclick="filterZone('all')">All</button>
+  <button class="zone-btn" id="zf-traffic" onclick="filterZone('traffic')">High traffic</button>
+  <button class="zone-btn" id="zf-quiet" onclick="filterZone('quiet')">Quiet zones</button>
+  <button class="zone-btn" id="zf-commercial" onclick="filterZone('commercial')">Commercial</button>
+</div>
+
+<div style="position:relative;width:100%;height:340px;">
+  <canvas id="noiseChart" role="img" aria-label="Grouped bar chart of min, average, and max noise levels across 7 study weeks in Bangalore, with per-week CPCB daytime limit reference lines.">Week 1 Industrial 75.2 dB avg. Week 2 Silence Zones 52.9 dB. Week 3 Residential 51.5 dB. Week 4 Commercial 73.7 dB. Week 5 High Traffic 78.6 dB. Week 6 Green Zone 51.3 dB. Week 7 High Traffic 77.1 dB.</canvas>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;font-size:11px;color:var(--color-text-tertiary);">
+  <span>Click any bar to highlight that week's analytics below.</span>
+</div>
+
+<div class="stat-grid" id="kpi-row">
+  <div class="stat-card"><p class="lbl">Study average</p><p class="val" id="kpi-avg">65.8 dB</p><p class="sub">across all 350 readings</p></div>
+  <div class="stat-card"><p class="lbl">Peak recorded</p><p class="val" style="color:#a32d2d;" id="kpi-peak">85.3 dB</p><p class="sub">Jayanagar 3rd Block, Wk 4</p></div>
+  <div class="stat-card"><p class="lbl">Lowest recorded</p><p class="val" style="color:#3b6d11;" id="kpi-low">24.9 dB</p><p class="sub">BTM Stage 4, Wk 3</p></div>
+  <div class="stat-card"><p class="lbl">Weeks exceeding limit</p><p class="val" id="kpi-exc">4 / 7</p><p class="sub">Wk 1, 4, 5, 7</p></div>
+  <div class="stat-card"><p class="lbl">Highest exceedance</p><p class="val" style="color:#a32d2d;" id="kpi-excamt">+20.3 dB</p><p class="sub">above CPCB limit</p></div>
+</div>
+
+<div class="analytics-section">
+  <p class="section-label">Week-by-week analytics</p>
+  <div style="overflow-x:auto;">
+  <table class="atbl" id="analytics-table">
+    <thead>
+      <tr>
+        <th style="width:90px;">Week</th>
+        <th style="width:110px;">Zone focus</th>
+        <th style="width:60px;">Min avg</th>
+        <th style="width:65px;">Overall avg</th>
+        <th style="width:60px;">Max avg</th>
+        <th style="width:60px;">Peak dB</th>
+        <th style="width:65px;">CPCB limit</th>
+        <th style="width:80px;">Exceedance</th>
+        <th style="width:120px;">Status</th>
+      </tr>
+    </thead>
+    <tbody id="analytics-body"></tbody>
+  </table>
+  </div>
+</div>
+
+<div class="analytics-section">
+  <p class="section-label">Zone-type comparison</p>
+  <div id="zone-compare" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;"></div>
+</div>
+
+<div class="analytics-section">
+  <p class="section-label">Key findings</p>
+  <div id="findings-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const ALL_WEEKS = [
+  {label:['Week 1','Industrial'],zone:'Industrial',focus:'Industrial zones',minAvg:71.14,avg:75.18,maxAvg:79.04,peak:83.9,low:66.4,cpcb:75,entries:50,dates:'16–20 Feb',surveyors:'Akshar, Agilesh, Ananya, Neha'},
+  {label:['Week 2','Silence zones'],zone:'Silence',focus:'Silence zones',minAvg:47.83,avg:52.89,maxAvg:57.79,peak:77.9,low:43.5,cpcb:50,entries:50,dates:'23–27 Feb',surveyors:'Akshar, Agilesh, Ananya, Neha'},
+  {label:['Week 3','Residential'],zone:'Residential',focus:'Residential zones',minAvg:47.04,avg:51.46,maxAvg:56.02,peak:67.2,low:24.9,cpcb:55,entries:50,dates:'2–6 Mar',surveyors:'Akshar, Agilesh'},
+  {label:['Week 4','Commercial'],zone:'Commercial',focus:'Commercial zones',minAvg:68.20,avg:73.72,maxAvg:80.10,peak:85.3,low:61.5,cpcb:65,entries:50,dates:'9–13 Mar',surveyors:'Akshar, Agilesh'},
+  {label:['Week 5','High traffic'],zone:'Traffic',focus:'High traffic — Silk Board',minAvg:74.86,avg:78.59,maxAvg:81.96,peak:83.8,low:71.6,cpcb:65,entries:50,dates:'16–20 Mar',surveyors:'Akshar'},
+  {label:['Week 6','Green zone'],zone:'Green',focus:'Green / quiet zone',minAvg:49.28,avg:51.28,maxAvg:52.14,peak:56.8,low:43.5,cpcb:55,entries:50,dates:'23–27 Mar',surveyors:'Akshar, Agilesh, Ananya, Neha'},
+  {label:['Week 7','High traffic'],zone:'Traffic',focus:'High traffic — Hosur Rd',minAvg:74.56,avg:77.08,maxAvg:79.54,peak:83.4,low:67.2,cpcb:65,entries:50,dates:'30 Mar–3 Apr',surveyors:'Agilesh'},
+];
+
+const ZONE_FILTER = {
+  all: [0,1,2,3,4,5,6],
+  traffic: [4,6],
+  quiet: [1,2,5],
+  commercial: [3]
+};
+
+let visible = {min:true,avg:true,max:true,cpcb:true};
+let activeFilter = 'all';
+let activeWeek = null;
+let chartInst = null;
+
+function getFilteredIndices(){return ZONE_FILTER[activeFilter];}
+
+const cpbLimitPlugin = {
+  id:'cpbLines',
+  afterDatasetsDraw(chart){
+    if(!visible.cpcb) return;
+    const {ctx,scales:{x,y},data} = chart;
+    const indices = getFilteredIndices();
+    indices.forEach((wi,ci)=>{
+      const w = ALL_WEEKS[wi];
+      const meta = chart.getDatasetMeta(0);
+      if(!meta.data[ci]) return;
+      const bw = meta.data[ci].width ?? 36;
+      const xc = x.getPixelForValue(ci);
+      const yp = y.getPixelForValue(w.cpcb);
+      const span = bw * 2.1;
+      ctx.save();
+      ctx.strokeStyle = activeWeek===wi ? '#E24B4A' : 'rgba(226,75,74,0.75)';
+      ctx.lineWidth = activeWeek===wi ? 2 : 1.5;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath();
+      ctx.moveTo(xc-span, yp);
+      ctx.lineTo(xc+span, yp);
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+};
+
+function buildChart(){
+  const indices = getFilteredIndices();
+  const weeks = indices.map(i=>ALL_WEEKS[i]);
+  const ctx = document.getElementById('noiseChart').getContext('2d');
+  if(chartInst) chartInst.destroy();
+
+  const isActive = wi => activeWeek === null || activeWeek === wi;
+
+  chartInst = new Chart(ctx,{
+    type:'bar',
+    plugins:[cpbLimitPlugin],
+    data:{
+      labels: weeks.map(w=>w.label),
+      datasets:[
+        {
+          label:'Min avg dB',
+          data: visible.min ? weeks.map((_,ci)=>ALL_WEEKS[indices[ci]].minAvg) : [],
+          backgroundColor: weeks.map((_,ci)=> isActive(indices[ci]) ? 'rgba(99,153,34,0.82)' : 'rgba(99,153,34,0.3)'),
+          borderColor:'#639922', borderWidth:0.5, borderRadius:3,
+          barPercentage:0.72, categoryPercentage:0.8
+        },
+        {
+          label:'Overall avg dB',
+          data: visible.avg ? weeks.map((_,ci)=>ALL_WEEKS[indices[ci]].avg) : [],
+          backgroundColor: weeks.map((_,ci)=> isActive(indices[ci]) ? 'rgba(55,138,221,0.85)' : 'rgba(55,138,221,0.28)'),
+          borderColor:'#185FA5', borderWidth:0.5, borderRadius:3,
+          barPercentage:0.72, categoryPercentage:0.8
+        },
+        {
+          label:'Max avg dB',
+          data: visible.max ? weeks.map((_,ci)=>ALL_WEEKS[indices[ci]].maxAvg) : [],
+          backgroundColor: weeks.map((_,ci)=> isActive(indices[ci]) ? 'rgba(186,117,23,0.82)' : 'rgba(186,117,23,0.28)'),
+          borderColor:'#854F0B', borderWidth:0.5, borderRadius:3,
+          barPercentage:0.72, categoryPercentage:0.8
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      onClick(evt, elems){
+        if(elems.length===0){activeWeek=null;}
+        else{
+          const ci=elems[0].index;
+          const wi=indices[ci];
+          activeWeek = (activeWeek===wi) ? null : wi;
+        }
+        buildChart();
+        renderTable();
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          callbacks:{
+            title(items){
+              const ci=items[0].dataIndex;
+              return ALL_WEEKS[indices[ci]].label.join(' — ');
+            },
+            beforeBody(items){
+              const ci=items[0].dataIndex;
+              const w=ALL_WEEKS[indices[ci]];
+              return `CPCB day limit: ${w.cpcb} dB`;
+            },
+            afterBody(items){
+              const ci=items[0].dataIndex;
+              const w=ALL_WEEKS[indices[ci]];
+              const exc=+(w.avg-w.cpcb).toFixed(1);
+              return exc>0 ? `Exceedance: +${exc} dB above limit` : `Within limit by ${Math.abs(exc)} dB`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{
+          grid:{display:false},
+          ticks:{autoSkip:false,font:{size:11},color:'#888780'}
+        },
+        y:{
+          min:25, max:90,
+          grid:{color:'rgba(136,135,128,0.15)'},
+          ticks:{font:{size:11},color:'#888780',callback:v=>v+' dB'},
+          title:{display:true,text:'noise level (dB)',font:{size:11},color:'#888780'}
+        }
+      }
+    }
+  });
+}
+
+function renderTable(){
+  const indices = getFilteredIndices();
+  const tbody = document.getElementById('analytics-body');
+  tbody.innerHTML='';
+  indices.forEach(wi=>{
+    const w=ALL_WEEKS[wi];
+    const exc=+(w.avg-w.cpcb).toFixed(1);
+    const isHighlighted = activeWeek===wi;
+    const tr=document.createElement('tr');
+    if(isHighlighted) tr.style.background='var(--color-background-secondary)';
+    const status = exc>5 ? '<span class="badge badge-danger">Exceeds limit</span>' :
+                   exc>0 ? '<span class="badge badge-warn">Marginally over</span>' :
+                           '<span class="badge badge-success">Within limit</span>';
+    const excStr = exc>0 ? `<span class="over">+${exc} dB</span>` : `<span class="under">${exc} dB</span>`;
+    tr.innerHTML=`
+      <td style="font-weight:${isHighlighted?'500':'400'};">Wk ${wi+1} <span style="color:var(--color-text-tertiary);font-size:10px;">${w.dates}</span></td>
+      <td style="font-size:11px;">${w.focus}</td>
+      <td>${w.minAvg.toFixed(1)}</td>
+      <td style="font-weight:500;">${w.avg.toFixed(1)}</td>
+      <td>${w.maxAvg.toFixed(1)}</td>
+      <td style="color:#a32d2d;">${w.peak}</td>
+      <td>${w.cpcb}</td>
+      <td>${excStr}</td>
+      <td>${status}</td>
+    `;
+    tr.style.cursor='pointer';
+    tr.onclick=()=>{activeWeek=(activeWeek===wi)?null:wi;buildChart();renderTable();};
+    tbody.appendChild(tr);
+  });
+}
+
+function renderZoneCompare(){
+  const zones = [
+    {name:'Industrial',color:'#888780',indices:[0]},
+    {name:'Silence',color:'#7F77DD',indices:[1]},
+    {name:'Residential',color:'#639922',indices:[2]},
+    {name:'Commercial',color:'#EF9F27',indices:[3]},
+    {name:'High traffic',color:'#E24B4A',indices:[4,6]},
+    {name:'Green / quiet',color:'#1D9E75',indices:[5]},
+  ];
+  const container=document.getElementById('zone-compare');
+  container.innerHTML='';
+  zones.forEach(z=>{
+    const wks=z.indices.map(i=>ALL_WEEKS[i]);
+    const avgOfAvg=(wks.reduce((s,w)=>s+w.avg,0)/wks.length).toFixed(1);
+    const maxPeak=Math.max(...wks.map(w=>w.peak));
+    const cpcb=wks[0].cpcb;
+    const over=+(avgOfAvg-cpcb).toFixed(1);
+    const div=document.createElement('div');
+    div.className='stat-card';
+    div.style.borderLeft=`3px solid ${z.color}`;
+    div.style.borderRadius='0 var(--border-radius-md) var(--border-radius-md) 0';
+    div.innerHTML=`
+      <p class="lbl" style="margin-bottom:6px;">${z.name}</p>
+      <p class="val" style="font-size:16px;margin-bottom:2px;">${avgOfAvg} dB</p>
+      <p class="sub">avg · peak ${maxPeak} dB</p>
+      <p class="sub" style="margin-top:4px;">${over>0?`<span style="color:#a32d2d;">+${over} dB over limit</span>`:`<span style="color:#3b6d11;">${Math.abs(over)} dB under limit</span>`}</p>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function renderFindings(){
+  const findings=[
+    {icon:'↑',color:'#a32d2d',text:'High traffic zones (Wks 5 & 7) averaged 77.8 dB — 12.8 dB above the 65 dB CPCB daytime limit.'},
+    {icon:'↑',color:'#854f0b',text:'Commercial zones (Wk 4) peaked at 85.3 dB at Jayanagar 3rd Block on a weekend, a 20.3 dB exceedance.'},
+    {icon:'!',color:'#854f0b',text:'Silence zones (Wk 2) breached the 50 dB limit during Jain University dispersal time, spiking to 77.9 dB.'},
+    {icon:'↓',color:'#3b6d11',text:'Green zones (Wk 6) recorded the lowest average at 51.3 dB — entirely within the 55 dB CPCB limit.'},
+    {icon:'↓',color:'#3b6d11',text:'The single lowest reading was 24.9 dB at BTM Stage 4 (residential interior), well below all zone limits.'},
+    {icon:'=',color:'#185FA5',text:'Industrial zones (Wk 1) averaged 75.2 dB, marginally above the 75 dB industrial limit — the tightest exceedance.'},
+  ];
+  const container=document.getElementById('findings-list');
+  container.innerHTML='';
+  findings.forEach(f=>{
+    const div=document.createElement('div');
+    div.style.cssText='display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:var(--border-radius-md);background:var(--color-background-secondary);';
+    div.innerHTML=`<span style="font-size:14px;font-weight:500;color:${f.color};flex-shrink:0;margin-top:1px;">${f.icon}</span><span style="font-size:13px;color:var(--color-text-primary);line-height:1.5;">${f.text}</span>`;
+    container.appendChild(div);
+  });
+}
+
+function toggle(key){
+  visible[key]=!visible[key];
+  const btn=document.getElementById('tog-'+key);
+  btn.classList.toggle('active',visible[key]);
+  buildChart();
+}
+
+function filterZone(zone){
+  activeFilter=zone;
+  activeWeek=null;
+  document.querySelectorAll('.zone-btn').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('zf-'+zone).classList.add('sel');
+  buildChart();
+  renderTable();
+}
+
+buildChart();
+renderTable();
+renderZoneCompare();
+renderFindings();
+</script>
